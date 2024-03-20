@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/krl42c/healthyy/internal/parser"
+	"net/http"
 	"os"
 	"time"
+
+	"github.com/krl42c/healthyy/internal/parser"
 )
 
 func main() {
@@ -34,17 +36,23 @@ func main() {
 
 func monitor(entry parser.ConfigEntry, index int) {
 	for {
-		updateCli(entry.URL, index)
+		update(entry.URL, index)
 		time.Sleep(entry.Duration)
 	}
 }
 
-func updateCli(url string, index int) {
+func update(url string, index int) {
 	move := "\033[%d;0H"
 	clearLine := "\033[2K"
 
+	_, err := http.Get(url)
+	status := "ALIVE"
+
+	if err != nil {
+		status = "DEAD"
+	}
+
 	fmt.Printf(move, index+1)
 	fmt.Print(clearLine)
-
-	fmt.Printf("%s - ALIVE", url)
+	fmt.Printf("%s - %s", url, status)
 }
