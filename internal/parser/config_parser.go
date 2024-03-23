@@ -50,7 +50,7 @@ func ParseConfig(source string, failOnError bool) []ConfigEntry {
 			continue
 		}
 
-		configEntries = append(configEntries, ConfigEntry{string(cfgItems[0]), *totalDuration})
+		configEntries = append(configEntries, ConfigEntry{confUrl, *totalDuration})
 	}
 	return configEntries
 }
