@@ -11,8 +11,15 @@ import (
 	"github.com/krl42c/healthyy/internal/parser"
 )
 
+const (
+	COLOR_RED   = 31
+	COLOR_GREEN = 32
+)
+
 func main() {
+
 	fmt.Println("Healthyy")
+	fmt.Printf("\033[?25l")
 
 	source, err := os.ReadFile("config.txt")
 	if err != nil {
@@ -29,14 +36,10 @@ func main() {
 
 	fmt.Print("\033[H\033[2J")
 
-	// handle terminal resizing
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, syscall.SIGWINCH)
-	go func() {
-		for range c {
-			fmt.Print("\033[H\033[2J")
-		}
-	}()
+
+	go handleResize(c)
 
 	for index, entry := range parsedConf {
 		go monitor(entry, index)
@@ -58,12 +61,21 @@ func update(url string, index int) {
 
 	_, err := http.Get(url)
 	status := "ALIVE"
+	color := COLOR_GREEN
 
 	if err != nil {
 		status = "DEAD"
+		color = COLOR_RED
 	}
 
+	colored := fmt.Sprintf("\x1b[%dm%s\x1b[0m", color, status)
 	fmt.Printf(move, index+1)
 	fmt.Print(clearLine)
-	fmt.Printf("%s - %s", url, status)
+	fmt.Printf("%s - %s", url, colored)
+}
+
+func handleResize(c chan os.Signal) {
+	for range c {
+		fmt.Print("\033[H\033[2J")
+	}
 }
