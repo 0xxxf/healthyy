@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -17,6 +18,7 @@ const (
 )
 
 func main() {
+	defer restoreTerminal()
 
 	fmt.Println("Healthyy")
 	fmt.Printf("\033[?25l")
@@ -36,10 +38,13 @@ func main() {
 
 	fmt.Print("\033[H\033[2J")
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, syscall.SIGWINCH)
+	cSigWinch := make(chan os.Signal, 1)
+	cSigInt := make(chan os.Signal, 1)
+	signal.Notify(cSigWinch, syscall.SIGWINCH)
+	signal.Notify(cSigInt, os.Interrupt, syscall.SIGTERM)
 
-	go handleResize(c)
+	go handleResize(cSigWinch)
+	go handleInterrup(cSigInt)
 
 	for index, entry := range parsedConf {
 		go monitor(entry, index)
@@ -78,4 +83,16 @@ func handleResize(c chan os.Signal) {
 	for range c {
 		fmt.Print("\033[H\033[2J")
 	}
+}
+
+func handleInterrup(c chan os.Signal) {
+	<-c
+	restoreTerminal()
+	os.Exit(1)
+}
+
+func restoreTerminal() {
+	restoreState := exec.Command("stty", "-g")
+	restoreState.Stdin = os.Stdin
+	restoreState.Run()
 }
