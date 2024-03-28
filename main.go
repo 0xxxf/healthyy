@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"os/signal"
 	"syscall"
 	"time"
@@ -18,8 +17,6 @@ const (
 )
 
 func main() {
-	defer restoreTerminal()
-
 	fmt.Println("Healthyy")
 	fmt.Printf("\033[?25l")
 
@@ -36,6 +33,7 @@ func main() {
 		panic("No config provided")
 	}
 
+	defer restoreTerminal()
 	fmt.Print("\033[H\033[2J")
 
 	cSigWinch := make(chan os.Signal, 1)
@@ -92,7 +90,5 @@ func handleInterrup(c chan os.Signal) {
 }
 
 func restoreTerminal() {
-	restoreState := exec.Command("stty", "-g")
-	restoreState.Stdin = os.Stdin
-	restoreState.Run()
+	fmt.Printf("\033c")
 }
