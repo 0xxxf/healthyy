@@ -11,26 +11,62 @@ import (
 	"github.com/krl42c/healthyy/internal/parser"
 )
 
+type StatusColor uint8
+type Status string
+
 const (
-	COLOR_RED   = 31
-	COLOR_GREEN = 32
+	STATUS_COLOR_RED   StatusColor = 31
+	STATUS_COLOR_GREEN StatusColor = 32
 )
 
+const (
+	STATUS_ALIVE Status = "ALIVE"
+	STATUS_DEAD  Status = "DEAD"
+)
+
+type URLState struct {
+	url     string
+	status  Status
+	color   StatusColor
+	refresh time.Duration
+}
+
+func (u *URLState) Healthcheck() {
+	_, err := http.Get(u.url)
+	if err != nil {
+		u.color = STATUS_COLOR_RED
+		u.status = STATUS_DEAD
+	} else {
+		u.color = STATUS_COLOR_GREEN
+		u.status = STATUS_ALIVE
+	}
+}
+
 func main() {
-	fmt.Println("Healthyy")
 	fmt.Printf("\033[?25l")
 
 	source, err := os.ReadFile("config.txt")
 	if err != nil {
 		panic("wrong file provided")
 	}
-	parsedConf := parser.ParseConfig(string(source), true)
-	for _, conf := range parsedConf {
-		fmt.Println(conf.URL)
-	}
 
+	parsedConf := parser.ParseConfig(string(source), true)
 	if len(parsedConf) == 0 || parsedConf == nil {
 		panic("No config provided")
+	}
+
+	var urlStates []URLState
+	for _, conf := range parsedConf {
+		urlStates = append(urlStates, URLState{
+			url:     conf.URL,
+			status:  STATUS_ALIVE,
+			color:   STATUS_COLOR_GREEN,
+			refresh: conf.Duration,
+		})
+	}
+
+	for _, s := range urlStates {
+		s.Healthcheck()
 	}
 
 	defer restoreTerminal()
@@ -41,45 +77,40 @@ func main() {
 	signal.Notify(cSigWinch, syscall.SIGWINCH)
 	signal.Notify(cSigInt, os.Interrupt, syscall.SIGTERM)
 
-	go handleResize(cSigWinch)
+	go handleResize(cSigWinch, urlStates)
 	go handleInterrup(cSigInt)
 
-	for index, entry := range parsedConf {
+	for index, entry := range urlStates {
 		go monitor(entry, index)
 	}
 
 	select {}
 }
 
-func monitor(entry parser.ConfigEntry, index int) {
+func monitor(entry URLState, index int) {
 	for {
-		update(entry.URL, index)
-		time.Sleep(entry.Duration)
+		entry.Healthcheck()
+		updateScreen(entry, index)
+		time.Sleep(entry.refresh)
 	}
 }
 
-func update(url string, index int) {
+func updateScreen(urlState URLState, termIndex int) {
 	move := "\033[%d;0H"
 	clearLine := "\033[2K"
-
-	_, err := http.Get(url)
-	status := "ALIVE"
-	color := COLOR_GREEN
-
-	if err != nil {
-		status = "DEAD"
-		color = COLOR_RED
-	}
-
-	colored := fmt.Sprintf("\x1b[%dm%s\x1b[0m", color, status)
-	fmt.Printf(move, index+1)
+	colored := fmt.Sprintf("\x1b[%dm%s\x1b[0m", urlState.color, urlState.status)
+	fmt.Printf(move, termIndex+1)
 	fmt.Print(clearLine)
-	fmt.Printf("%s - %s", url, colored)
+	fmt.Printf("%s - %s", urlState.url, colored)
 }
 
-func handleResize(c chan os.Signal) {
+func handleResize(c chan os.Signal, states []URLState) {
 	for range c {
 		fmt.Print("\033[H\033[2J")
+	}
+
+	for i, s := range states {
+		updateScreen(s, i)
 	}
 }
 
